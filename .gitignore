@@ -1,0 +1,9 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environment
+venv/
+
+# Datasets and output files
+*.csv
