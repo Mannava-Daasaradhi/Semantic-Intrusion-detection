@@ -7,3 +7,5 @@ venv/
 
 # Datasets and output files
 *.csv
+
+*.pcap
