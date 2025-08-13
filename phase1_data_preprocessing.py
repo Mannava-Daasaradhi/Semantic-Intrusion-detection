@@ -1,97 +1,84 @@
 # phase1_data_preprocessing.py
 import os
-from scapy.all import rdpcap
 import pandas as pd
+import numpy as np
 
-def process_pcap_files(directory_path):
+# --- Configuration ---
+# Directory where the original CIC-IDS-2017 CSV files are stored.
+# Based on your screenshot, they are in a subfolder.
+INPUT_CSV_DIRECTORY = 'CIC-IDS-2017/GeneratedLabelledFlows/' 
+
+# The final, cleaned output file.
+OUTPUT_CLEANED_CSV = 'final_labeled_flows_cicids.csv'
+
+
+def load_and_combine_csvs(directory_path):
     """
-    Reads all pcap files in a directory and extracts detailed information,
-    including initial semantic protocol tags.
-
-    Args:
-        directory_path (str): The path to the directory containing pcap files.
-
-    Returns:
-        pandas.DataFrame: A DataFrame with combined packet information.
+    Loads all CSV files from the specified directory, combines them,
+    and returns a single pandas DataFrame.
     """
-    all_packet_data = []
-
-    # Iterate through all files in the specified directory
+    all_files = []
+    # Loop through all files in the directory
     for filename in os.listdir(directory_path):
-        if filename.endswith(".pcap"):
+        if filename.endswith(".csv"):
             file_path = os.path.join(directory_path, filename)
-            print(f"Processing file: {filename}")
+            print(f"Reading file: {filename}...")
+            # Read the CSV and append it to our list
+            df = pd.read_csv(file_path, encoding='latin1', on_bad_lines='skip')
+            all_files.append(df)
+    
+    # Concatenate all DataFrames into one
+    if not all_files:
+        print("Error: No CSV files found in the directory. Please check the INPUT_CSV_DIRECTORY path.")
+        return None
+        
+    print("Combining all DataFrames...")
+    combined_df = pd.concat(all_files, ignore_index=True)
+    return combined_df
 
-            try:
-                packets = rdpcap(file_path)
-                print(f"  - Successfully read {len(packets)} packets.")
-            except Exception as e:
-                print(f"  - Error reading {filename}: {e}")
-                continue
+def clean_data(df):
+    """
+    Cleans the combined DataFrame by fixing column names, removing duplicates,
+    and handling invalid numerical values.
+    """
+    print("Cleaning the combined data...")
+    
+    # 1. Standardize Column Names
+    # Removes leading/trailing spaces and replaces spaces with underscores
+    original_columns = df.columns
+    df.columns = df.columns.str.strip()
+    df.columns = df.columns.str.replace(' ', '_')
+    print(" - Standardized column names.")
+    
+    # 2. Drop Duplicate Rows
+    # Removes any rows that are exact copies of each other
+    initial_rows = len(df)
+    df.drop_duplicates(inplace=True)
+    print(f" - Removed {initial_rows - len(df)} duplicate rows.")
 
-            # Process each packet in the file
-            for packet in packets:
-                packet_info = {}
-                
-                # Check for IP layer
-                if 'IP' in packet:
-                    packet_info['Source_IP'] = packet['IP'].src
-                    packet_info['Destination_IP'] = packet['IP'].dst
-                    
-                    # --- Initial Semantic Tagging: Protocol ---
-                    # Check for TCP/UDP layer to assign a protocol tag
-                    if 'TCP' in packet:
-                        packet_info['Protocol'] = 'TCP'
-                        packet_info['Source_Port'] = packet['TCP'].sport
-                        packet_info['Destination_Port'] = packet['TCP'].dport
-                    elif 'UDP' in packet:
-                        packet_info['Protocol'] = 'UDP'
-                        packet_info['Source_Port'] = packet['UDP'].sport
-                        packet_info['Destination_Port'] = packet['UDP'].dport
-                    elif packet['IP'].proto == 1: # ICMP protocol number
-                        packet_info['Protocol'] = 'ICMP'
-                        packet_info['Source_Port'] = None
-                        packet_info['Destination_Port'] = None
-                    else:
-                        packet_info['Protocol'] = 'Other'
-                        packet_info['Source_Port'] = None
-                        packet_info['Destination_Port'] = None
-                
-                # REVISED LOGIC: Check for HTTP/DNS layers safely
-                # First, check if the Raw layer exists
-                if 'Raw' in packet:
-                    payload = str(packet['Raw'].load)
-                    if 'GET' in payload or 'POST' in payload:
-                        packet_info['Protocol'] = 'HTTP'
-                
-                # Check for DNS layer safely
-                if 'DNS' in packet:
-                    packet_info['Protocol'] = 'DNS'
+    # 3. Handle Missing and Infinite Values
+    # Replaces 'Infinity' and '-Infinity' with NaN (Not a Number)
+    df.replace([np.inf, -np.inf], np.nan, inplace=True)
+    # Drops rows that have any NaN values
+    initial_rows = len(df)
+    df.dropna(inplace=True)
+    print(f" - Removed {initial_rows - len(df)} rows with missing or infinite values.")
 
-                packet_info['Packet_Size'] = len(packet)
-                all_packet_data.append(packet_info)
-
-    df = pd.DataFrame(all_packet_data)
+    # 4. Final Data Check
+    print(f"\nCleaning complete. Final dataset has {len(df)} rows and {len(df.columns)} columns.")
+    
     return df
 
+
 if __name__ == "__main__":
-    # Path updated to match your screenshot
-    pcap_directory = 'CIC-IDS-2017/PCAPs/'
+    # Step 1: Load and combine all the raw CSV data
+    raw_df = load_and_combine_csvs(INPUT_CSV_DIRECTORY)
     
-    # Check if the directory exists
-    if not os.path.exists(pcap_directory):
-        print(f"Error: Directory '{pcap_directory}' not found. Please make sure the folder name is correct.")
-    else:
-        # Process all files and get the final DataFrame
-        combined_df = process_pcap_files(pcap_directory)
+    if raw_df is not None:
+        # Step 2: Clean the combined DataFrame
+        cleaned_df = clean_data(raw_df)
         
-        if combined_df is not None and not combined_df.empty:
-            print("\n--- Combined Packet Data (First 5 rows) ---")
-            print(combined_df.head())
-            
-            print(f"\nTotal packets processed from all files: {len(combined_df)}")
-            
-            # Save the processed data to a CSV for later use
-            output_csv_path = 'processed_cicids2017_packets.csv'
-            combined_df.to_csv(output_csv_path, index=False)
-            print(f"Processed data saved to {output_csv_path}")
+        # Step 3: Save the final, clean DataFrame to a new CSV file
+        print(f"\nSaving cleaned data to '{OUTPUT_CLEANED_CSV}'...")
+        cleaned_df.to_csv(OUTPUT_CLEANED_CSV, index=False)
+        print("Done!")
