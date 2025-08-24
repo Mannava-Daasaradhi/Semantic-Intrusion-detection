@@ -1,6 +1,6 @@
-# phase2_advanced_semantics.py
+# phase2_advanced_semantics.py (Corrected with Countdown)
 import pandas as pd
-from scapy.all import rdpcap, TCP, UDP, Raw
+from scapy.all import PcapReader, TCP, UDP, Raw
 from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
 import warnings
@@ -9,77 +9,89 @@ import warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="scapy")
 
 # --- Configuration ---
-# You must have the original .pcap file that corresponds to the dataset.
-PCAP_FILE_PATH = r'C:\Users\daasa\OneDrive\Desktop\XAICN\CIC-IDS-2017\Friday-WorkingHours.pcap' # Or whatever the full name is
+PCAP_FILE_PATH = r'C:\Users\daasa\OneDrive\Desktop\XAICN\CIC-IDS-2017\Friday-WorkingHours.pcap'
 OUTPUT_CSV_PATH = 'semantic_features_dataset.csv'
-# Using a lightweight but powerful model for generating embeddings.
 MODEL_NAME = 'all-MiniLM-L6-v2'
+BATCH_SIZE = 256
+
+def get_packet_count(pcap_path):
+    """Reads through the pcap file once just to get a total count."""
+    print("Pre-counting packets in the file for progress bar...")
+    count = 0
+    with PcapReader(pcap_path) as pcap_reader:
+        for _ in pcap_reader:
+            count += 1
+    return count
 
 def extract_semantic_features():
     """
-    Reads a .pcap file, extracts packet payloads, and generates semantic embeddings.
+    Reads a .pcap file in a stream, extracts payloads, and generates embeddings.
     """
     print(f"Loading Sentence Transformer model: '{MODEL_NAME}'...")
-    # This will download the model the first time you run it.
     model = SentenceTransformer(MODEL_NAME)
     print(" - Model loaded successfully.")
 
+    # --- FIX: Pre-count the packets to enable the countdown ---
     try:
-        print(f"Reading packets from '{PCAP_FILE_PATH}'... (This may take a while)")
-        packets = rdpcap(PCAP_FILE_PATH)
-        print(f" - Found {len(packets)} packets.")
+        total_packets = get_packet_count(PCAP_FILE_PATH)
+        print(f" - Found {total_packets} total packets.")
     except FileNotFoundError:
         print(f"Error: The pcap file '{PCAP_FILE_PATH}' was not found.")
-        print("Please download the original .pcap files for the CIC-IDS-2017 dataset.")
         return
 
-    results = []
+    packet_data = []
+    print(f"\nStreaming packets from '{PCAP_FILE_PATH}' and extracting payloads...")
     
-    # Use tqdm for a progress bar as this can be a slow process
-    print("Processing packets and generating embeddings...")
-    for packet in tqdm(packets, desc="Analyzing Packets"):
-        payload_text = ""
-        # We are interested in the payload inside TCP or UDP packets
-        if packet.haslayer(TCP) and packet.haslayer(Raw):
-            try:
-                # Decode the raw payload into a string, ignoring non-UTF-8 characters
-                payload_text = packet[Raw].load.decode('utf-8', errors='ignore')
-            except Exception:
-                continue # Skip if payload cannot be decoded
-        
-        elif packet.haslayer(UDP) and packet.haslayer(Raw):
-            try:
-                payload_text = packet[Raw].load.decode('utf-8', errors='ignore')
-            except Exception:
-                continue
+    with PcapReader(PCAP_FILE_PATH) as pcap_reader:
+        # --- FIX: Configure tqdm to show remaining count ---
+        progress_bar = tqdm(
+            pcap_reader, 
+            total=total_packets, 
+            desc="Reading Packets",
+            # This format shows description, percentage, bar, count, and remaining
+            bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{remaining} left]'
+        )
 
-        # Only process packets that had a text payload
-        if payload_text:
-            # Generate the semantic embedding for the payload text
-            embedding = model.encode(payload_text)
+        for packet in progress_bar:
+            payload_text = ""
+            if packet.haslayer(TCP) and packet.haslayer(Raw):
+                try:
+                    payload_text = packet[Raw].load.decode('utf-8', errors='ignore')
+                except Exception: continue
+            elif packet.haslayer(UDP) and packet.haslayer(Raw):
+                try:
+                    payload_text = packet[Raw].load.decode('utf-8', errors='ignore')
+                except Exception: continue
             
-            # Store the embedding along with some basic info
-            # In a full system, you would merge this with the full flow stats
-            results.append({
-                'timestamp': float(packet.time),
-                'payload_text': payload_text,
-                'embedding': embedding
-            })
+            if payload_text:
+                packet_data.append({
+                    'timestamp': float(packet.time),
+                    'payload_text': payload_text
+                })
 
-    if not results:
+    if not packet_data:
         print("\nWarning: No valid TCP/UDP payloads with text data found in the pcap file.")
-        print("This can happen if the traffic is mostly encrypted or doesn't contain Raw data.")
         return
 
-    # --- Save the results to a DataFrame ---
-    print(f"\nSuccessfully processed {len(results)} packets with payloads.")
-    df = pd.DataFrame(results)
-    
-    # The 'embedding' column is a numpy array. We'll split it into separate columns.
-    embedding_df = pd.DataFrame(df['embedding'].to_list(), index=df.index)
-    embedding_df = embedding_df.add_prefix('embed_')
+    print(f"\nFound {len(packet_data)} packets with text payloads.")
 
-    # Combine the original data with the new embedding columns
+    print("Generating embeddings for all payloads...")
+    
+    all_payloads = [data['payload_text'] for data in packet_data]
+    
+    embeddings = model.encode(
+        all_payloads, 
+        show_progress_bar=True,
+        batch_size=BATCH_SIZE
+    )
+
+    print("\nCombining results...")
+    for i, data in enumerate(packet_data):
+        data['embedding'] = embeddings[i]
+
+    df = pd.DataFrame(packet_data)
+    
+    embedding_df = pd.DataFrame(df['embedding'].to_list(), index=df.index).add_prefix('embed_')
     final_df = pd.concat([df.drop('embedding', axis=1), embedding_df], axis=1)
 
     print(f"Saving new dataset with semantic features to '{OUTPUT_CSV_PATH}'...")

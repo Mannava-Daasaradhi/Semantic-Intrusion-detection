@@ -1,52 +1,85 @@
-# phase6_llm_explanation.py (Final Version with gpt2)
+# phase6_llm_explanation.py (with Plot Generation)
 import pandas as pd
 import xgboost as xgb
 from transformers import pipeline, set_seed
 import warnings
 import torch
+import json
+import matplotlib.pyplot as plt
+import os # --- ADDED LINE ---
 
 # --- Configuration ---
 MODEL_READY_DATA_PATH = 'model_ready_data.csv'
 MODEL_PATH = 'xgboost_cicids_model.json'
+LABEL_MAPPING_PATH = 'label_mapping.json'
+PLOT_OUTPUT_FOLDER = 'explanation_plots' # --- ADDED LINE ---
 
-def generate_llm_explanation(model, sample_data, label_map):
+def generate_feature_plot(features, attack_name):
     """
-    Uses the gpt2 model from Hugging Face to generate a coherent explanation.
+    Creates and saves a bar chart of key traffic features.
     """
-    print("\n--- Generating Explanation for a Sample Attack ---")
+    features_to_plot = {
+        'Packets/s': features.get('Flow_Packets/s', 0),
+        'Bytes/s': features.get('Flow_Bytes/s', 0),
+        'Total Fwd Pkts': features.get('Total_Fwd_Packets', 0),
+        'Total Bwd Pkts': features.get('Total_Backward_Packets', 0)
+    }
+    
+    plot_values = [v + 1 for v in features_to_plot.values()]
+    
+    plt.figure(figsize=(10, 6))
+    bars = plt.bar(features_to_plot.keys(), plot_values, color=['#ff6666', '#ffcc66', '#66b3ff', '#99ff99'])
+    plt.yscale('log')
+    plt.title(f'Key Indicators for "{attack_name}" Attack', fontsize=16)
+    plt.ylabel('Value (Log Scale)', fontsize=12)
+    plt.xticks(rotation=10, fontsize=10)
+    
+    for bar in bars:
+        yval = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width()/2.0, yval, f'{yval-1:.2f}', va='bottom', ha='center')
 
-    # --- 1. Load a More Powerful LLM (gpt2) ---
-    print("Loading language model (gpt2)...")
-    device = 0 if torch.cuda.is_available() else -1
-    # We use the standard 'gpt2' model for better quality generation
-    explainer = pipeline("text-generation", model="gpt2", device=device)
-    print(f" - Model loaded successfully on device: {'cuda' if device == 0 else 'cpu'}.")
-    set_seed(42)
+    # --- MODIFIED SECTION ---
+    # Create the output folder if it doesn't exist
+    os.makedirs(PLOT_OUTPUT_FOLDER, exist_ok=True)
+    
+    # Save the plot with a unique name inside the new folder
+    filename = f"explanation_plot_{attack_name.replace(' ', '_')}.png"
+    save_path = os.path.join(PLOT_OUTPUT_FOLDER, filename)
+    plt.savefig(save_path)
+    print(f"--- Saved feature plot to '{save_path}' ---")
+    plt.close()
 
-    # --- 2. Make a Prediction ---
-    prediction_index = model.predict(sample_data.drop('Label', axis=1))[0]
-    predicted_label = label_map.get(prediction_index, "Unknown Attack")
-    print(f" - XGBoost model detected: '{predicted_label}'")
+def generate_llm_explanation(explainer, model, sample_data, label_map):
+    """
+    Generates a text explanation and a feature plot for an attack sample.
+    """
+    print("\n" + "="*80)
+    
+    label_id = sample_data['Label'].iloc[0]
+    predicted_label = label_map.get(str(label_id), "Unknown Attack")
+    print(f"--- Generating Explanation for a Sample '{predicted_label}' Attack ---")
 
-    # --- 3. Use the "Completion" Style Prompt ---
     sample_features = sample_data.iloc[0].to_dict()
+    
+    generate_feature_plot(sample_features, predicted_label)
+
     prompt = f"""
 Analysis of a network event flagged as a '{predicted_label}' attack.
 
 Key Indicators:
-- Extremely high packets per second: {sample_features.get('Flow_Packets/s', 'N/A'):.2f}
-- Negligible data transfer (Bytes/s): {sample_features.get('Flow_Bytes/s', 'N/A'):.2f}
-- One-way traffic with no return packets: {int(sample_features.get('Total_Backward_Packets', 0))} backward packets.
+- Packets per second: {sample_features.get('Flow_Packets/s', 'N/A'):.2f}
+- Bytes per second: {sample_features.get('Flow_Bytes/s', 'N/A'):.2f}
+- Total Forward Packets: {int(sample_features.get('Total_Fwd_Packets', 0))}
+- Total Backward Packets: {int(sample_features.get('Total_Backward_Packets', 0))}
 
 Explanation for Security Analyst: This traffic is highly indicative of a "{predicted_label}" attack because"""
 
-    print("\n--- Sending Final Prompt to LLM ---")
+    print("\n--- Sending Prompt to LLM ---")
     print(prompt)
 
-    # --- 4. Generate the Explanation ---
     llm_output = explainer(
         prompt, 
-        max_new_tokens=75,
+        max_new_tokens=150,
         num_return_sequences=1,
         pad_token_id=explainer.tokenizer.eos_token_id
     )
@@ -54,6 +87,7 @@ Explanation for Security Analyst: This traffic is highly indicative of a "{predi
 
     print("\n--- AI-Generated Explanation ---")
     print(explanation)
+    print("="*80 + "\n")
 
 
 if __name__ == "__main__":
@@ -61,18 +95,29 @@ if __name__ == "__main__":
         df = pd.read_csv(MODEL_READY_DATA_PATH)
         xgb_model = xgb.XGBClassifier()
         xgb_model.load_model(MODEL_PATH)
-
-        labels_df = pd.read_csv('final_labeled_flows_cicids.csv', usecols=['Label'])
-        labels_df['Label'] = labels_df['Label'].str.replace(' ', '_')
-        unique_labels = sorted(labels_df['Label'].unique())
-        target_names = {i: label for i, label in enumerate(unique_labels)}
-
-        attack_sample = df[df['Label'] == 4].head(1) 
         
-        if not attack_sample.empty:
-            generate_llm_explanation(xgb_model, attack_sample, target_names)
-        else:
-            print("Could not find a sample for the specified attack type (Label == 4).")
+        with open(LABEL_MAPPING_PATH, 'r') as f:
+            label_mapping = json.load(f)
+
+        print("Loading language model (gpt2)... This only happens once.")
+        device = 0 if torch.cuda.is_available() else -1
+        explainer_pipeline = pipeline("text-generation", model="gpt2", device=device)
+        set_seed(42)
+        print(f" - Model loaded successfully on device: {'cuda' if device == 0 else 'cpu'}.")
+
+        unique_labels = df['Label'].unique()
+        
+        for label_id in unique_labels:
+            label_name = label_mapping.get(str(label_id))
+            if label_name == 'BENIGN':
+                continue
+            
+            attack_sample = df[df['Label'] == label_id].head(1)
+            
+            if not attack_sample.empty:
+                generate_llm_explanation(explainer_pipeline, xgb_model, attack_sample, label_mapping)
+            else:
+                print(f"Could not find a sample for attack type: {label_name}")
 
     except FileNotFoundError as e:
         print(f"Error: Could not find a required file. {e.filename}")
