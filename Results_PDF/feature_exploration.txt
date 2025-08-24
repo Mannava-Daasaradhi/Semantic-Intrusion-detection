@@ -1,0 +1,207 @@
+(venv) PS C:\Users\daasa\OneDrive\Desktop\XAICN> python phase2_feature_exploration.py
+Loading cleaned data from 'final_labeled_flows_cicids.csv'...
+Data loaded successfully.
+
+--- 1. Basic DataFrame Info ---
+<class 'pandas.core.frame.DataFrame'>
+RangeIndex: 2827677 entries, 0 to 2827676
+Data columns (total 85 columns):
+ #   Column                       Dtype
+---  ------                       -----
+ 0   Flow_ID                      object
+ 1   Source_IP                    object
+ 2   Source_Port                  float64
+ 3   Destination_IP               object
+ 4   Destination_Port             float64
+ 5   Protocol                     float64
+ 6   Timestamp                    object
+ 7   Flow_Duration                float64
+ 8   Total_Fwd_Packets            float64
+ 9   Total_Backward_Packets       float64
+ 10  Total_Length_of_Fwd_Packets  float64
+ 11  Total_Length_of_Bwd_Packets  float64
+ 12  Fwd_Packet_Length_Max        float64
+ 13  Fwd_Packet_Length_Min        float64
+ 14  Fwd_Packet_Length_Mean       float64
+ 15  Fwd_Packet_Length_Std        float64
+ 16  Bwd_Packet_Length_Max        float64
+ 17  Bwd_Packet_Length_Min        float64
+ 18  Bwd_Packet_Length_Mean       float64
+ 19  Bwd_Packet_Length_Std        float64
+ 20  Flow_Bytes/s                 float64
+ 21  Flow_Packets/s               float64
+ 22  Flow_IAT_Mean                float64
+ 23  Flow_IAT_Std                 float64
+ 24  Flow_IAT_Max                 float64
+ 25  Flow_IAT_Min                 float64
+ 26  Fwd_IAT_Total                float64
+ 27  Fwd_IAT_Mean                 float64
+ 28  Fwd_IAT_Std                  float64
+ 29  Fwd_IAT_Max                  float64
+ 30  Fwd_IAT_Min                  float64
+ 31  Bwd_IAT_Total                float64
+ 32  Bwd_IAT_Mean                 float64
+ 33  Bwd_IAT_Std                  float64
+ 34  Bwd_IAT_Max                  float64
+ 35  Bwd_IAT_Min                  float64
+ 36  Fwd_PSH_Flags                float64
+ 37  Bwd_PSH_Flags                float64
+ 38  Fwd_URG_Flags                float64
+ 39  Bwd_URG_Flags                float64
+ 40  Fwd_Header_Length            float64
+ 41  Bwd_Header_Length            float64
+ 42  Fwd_Packets/s                float64
+ 43  Bwd_Packets/s                float64
+ 44  Min_Packet_Length            float64
+ 45  Max_Packet_Length            float64
+ 46  Packet_Length_Mean           float64
+ 47  Packet_Length_Std            float64
+ 48  Packet_Length_Variance       float64
+ 49  FIN_Flag_Count               float64
+ 50  SYN_Flag_Count               float64
+ 51  RST_Flag_Count               float64
+ 52  PSH_Flag_Count               float64
+ 53  ACK_Flag_Count               float64
+ 54  URG_Flag_Count               float64
+ 55  CWE_Flag_Count               float64
+ 56  ECE_Flag_Count               float64
+ 57  Down/Up_Ratio                float64
+ 58  Average_Packet_Size          float64
+ 59  Avg_Fwd_Segment_Size         float64
+ 60  Avg_Bwd_Segment_Size         float64
+ 61  Fwd_Header_Length.1          float64
+ 62  Fwd_Avg_Bytes/Bulk           float64
+ 63  Fwd_Avg_Packets/Bulk         float64
+ 64  Fwd_Avg_Bulk_Rate            float64
+ 65  Bwd_Avg_Bytes/Bulk           float64
+ 66  Bwd_Avg_Packets/Bulk         float64
+ 67  Bwd_Avg_Bulk_Rate            float64
+ 68  Subflow_Fwd_Packets          float64
+ 69  Subflow_Fwd_Bytes            float64
+ 70  Subflow_Bwd_Packets          float64
+ 71  Subflow_Bwd_Bytes            float64
+ 72  Init_Win_bytes_forward       float64
+ 73  Init_Win_bytes_backward      float64
+ 74  act_data_pkt_fwd             float64
+ 75  min_seg_size_forward         float64
+ 76  Active_Mean                  float64
+ 77  Active_Std                   float64
+ 78  Active_Max                   float64
+ 79  Active_Min                   float64
+ 80  Idle_Mean                    float64
+ 81  Idle_Std                     float64
+ 82  Idle_Max                     float64
+ 83  Idle_Min                     float64
+ 84  Label                        object
+dtypes: float64(80), object(5)
+memory usage: 1.8+ GB
+
+
+--- 2. Column Names ---
+The dataset contains the following columns:
+ - Flow_ID
+ - Source_IP
+ - Source_Port
+ - Destination_IP
+ - Destination_Port
+ - Protocol
+ - Timestamp
+ - Flow_Duration
+ - Total_Fwd_Packets
+ - Total_Backward_Packets
+ - Total_Length_of_Fwd_Packets
+ - Total_Length_of_Bwd_Packets
+ - Fwd_Packet_Length_Max
+ - Fwd_Packet_Length_Min
+ - Fwd_Packet_Length_Mean
+ - Fwd_Packet_Length_Std
+ - Bwd_Packet_Length_Max
+ - Bwd_Packet_Length_Min
+ - Bwd_Packet_Length_Mean
+ - Bwd_Packet_Length_Std
+ - Flow_Bytes/s
+ - Flow_Packets/s
+ - Flow_IAT_Mean
+ - Flow_IAT_Std
+ - Flow_IAT_Max
+ - Flow_IAT_Min
+ - Fwd_IAT_Total
+ - Fwd_IAT_Mean
+ - Fwd_IAT_Std
+ - Fwd_IAT_Max
+ - Fwd_IAT_Min
+ - Bwd_IAT_Total
+ - Bwd_IAT_Mean
+ - Bwd_IAT_Std
+ - Bwd_IAT_Max
+ - Bwd_IAT_Min
+ - Fwd_PSH_Flags
+ - Bwd_PSH_Flags
+ - Fwd_URG_Flags
+ - Bwd_URG_Flags
+ - Fwd_Header_Length
+ - Bwd_Header_Length
+ - Fwd_Packets/s
+ - Bwd_Packets/s
+ - Min_Packet_Length
+ - Max_Packet_Length
+ - Packet_Length_Mean
+ - Packet_Length_Std
+ - Packet_Length_Variance
+ - FIN_Flag_Count
+ - SYN_Flag_Count
+ - RST_Flag_Count
+ - PSH_Flag_Count
+ - ACK_Flag_Count
+ - URG_Flag_Count
+ - CWE_Flag_Count
+ - ECE_Flag_Count
+ - Down/Up_Ratio
+ - Average_Packet_Size
+ - Avg_Fwd_Segment_Size
+ - Avg_Bwd_Segment_Size
+ - Fwd_Header_Length.1
+ - Fwd_Avg_Bytes/Bulk
+ - Fwd_Avg_Packets/Bulk
+ - Fwd_Avg_Bulk_Rate
+ - Bwd_Avg_Bytes/Bulk
+ - Bwd_Avg_Packets/Bulk
+ - Bwd_Avg_Bulk_Rate
+ - Subflow_Fwd_Packets
+ - Subflow_Fwd_Bytes
+ - Subflow_Bwd_Packets
+ - Subflow_Bwd_Bytes
+ - Init_Win_bytes_forward
+ - Init_Win_bytes_backward
+ - act_data_pkt_fwd
+ - min_seg_size_forward
+ - Active_Mean
+ - Active_Std
+ - Active_Max
+ - Active_Min
+ - Idle_Mean
+ - Idle_Std
+ - Idle_Max
+ - Idle_Min
+ - Label
+
+
+--- 3. Attack Label Distribution ---
+Distribution of traffic labels:
+Label
+BENIGN                        2271122
+DoS Hulk                       230123
+PortScan                       158804
+DDoS                           128025
+DoS GoldenEye                   10293
+FTP-Patator                      7935
+SSH-Patator                      5897
+DoS slowloris                    5796
+DoS Slowhttptest                 5499
+Bot                              1956
+Web Attack  Brute Force         1507
+Web Attack  XSS                  652
+Infiltration                       36
+Web Attack  Sql Injection         21
+Heartbleed                         11
+Name: count, dtype: int64
